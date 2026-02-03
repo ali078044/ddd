@@ -1553,7 +1553,7 @@
     <!-- السكريبت الرئيسي -->
     <script>
         // ==================== الإعدادات العامة ====================
-        const API = "https://script.google.com/macros/s/AKfycbygN6qDHBQczx_ifpMALATjWzMY9VrHQmIAXEHiHIeWLJqgqTaxgwlow0TEXyyWELwBfA/exec";
+        const API = "https://script.google.com/macros/s/AKfycbwSS1RSQX1ikLVzEbACOCYWTvq2CVdW4XgVf00u0hpmbma11CN1VgpC7-6B7vRkfdg2rg/exec";
         
         // حالة التطبيق
         let state = {
@@ -3013,7 +3013,6 @@ submitBulk
             swTab('trk'); // التعديل الجديد: فتح البحث الشامل افتراضياً
         }
 		
-		
 		function swTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(`t${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
@@ -3214,23 +3213,25 @@ submitBulk
 		function renderHRTable() {
             const tbody = document.getElementById('hrBody');
             const isObjection = state.currentTab === 'obj';
+            const isMonitoring = state.currentTab === 'mon';
             
             let filteredData = [...state.allData];
             
-            const searchName = (isObjection ? document.getElementById('objSearchName') : document.getElementById('monSearchName'))?.value.toLowerCase() || '';
-            const searchFP = (isObjection ? document.getElementById('objSearchFP') : document.getElementById('monSearchFP'))?.value || '';
+            // تحديد عناصر البحث حسب التبويب
+            const searchNameInput = isObjection ? document.getElementById('objSearchName') : document.getElementById('monSearchName');
+            const searchFPInput = isObjection ? document.getElementById('objSearchFP') : document.getElementById('monSearchFP');
             
-            // === التعديل الجوهري هنا: استخدام الـ ID الصحيح (fCls) ===
-            // سابقاً كان يبحث عن filterSpeClass وهو غير موجود، فيفترض أنه فارغ ويعرض الكل
+            const searchName = searchNameInput?.value.toLowerCase() || '';
+            const searchFP = searchFPInput?.value || '';
+            
             const searchSpeClass = document.getElementById('fCls')?.value || ''; 
-            // ========================================================
 
             // تطبيق الفلاتر
             if (searchName) filteredData = filteredData.filter(item => item.name?.toLowerCase().includes(searchName));
             if (searchFP) filteredData = filteredData.filter(item => item.fp?.toString().includes(searchFP));
             
-            // تصفية حسب التصنيف الخاص (إذا كان محدداً)
-            if (!isObjection && searchSpeClass) {
+            // تصفية حسب التصنيف الخاص (فقط للمتابعة)
+            if (isMonitoring && searchSpeClass) {
                 filteredData = filteredData.filter(item => item.speClass === searchSpeClass);
             }
 
@@ -3246,18 +3247,32 @@ submitBulk
             // التقسيم للصفحات
             const total = filteredData.length;
             const totalPages = Math.ceil(total / state.lim) || 1;
-            if (state.pg > totalPages) state.pg = totalPages;
+            if (state.pg > totalPages) state.pg = 1; // إعادة تعيين للصفحة الأولى عند البحث
             
-            const pageData = filteredData.slice((state.pg - 1) * state.lim, state.pg * state.lim);
+            const start = (state.pg - 1) * state.lim;
+            const end = start + state.lim;
+            const pageData = filteredData.slice(start, end);
             
+            // تحديد عدد الأعمدة (colspan) لرسالة "لا توجد نتائج"
+            const colSpan = isMonitoring ? 10 : 9;
+
             if (pageData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">لا توجد بيانات مطابقة للبحث</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty-state">لا توجد بيانات مطابقة للبحث</td></tr>`;
+                document.getElementById('pageInfo').textContent = `0 من 0`;
+                document.getElementById('totalRecs').textContent = `(0)`;
                 return;
             }
             
             let html = '';
             pageData.forEach(item => {
-                html += isObjection ? renderObjectionRow(item) : renderFollowupRow(item);
+                // === التعديل هنا: اختيار دالة الرسم المناسبة ===
+                if (isMonitoring) {
+                    html += renderMonitoringRowNew(item); // استخدام الدالة الجديدة للمتابعة
+                } else if (isObjection) {
+                    html += renderObjectionRowNew(item); // استخدام الدالة الجديدة للاعتراضات
+                } else {
+                    html += renderFollowupRow(item); // احتياطي
+                }
             });
             tbody.innerHTML = html;
             
@@ -3385,8 +3400,8 @@ submitBulk
                 <div class="stat-item border-blue-300 text-blue-700">متابعة: ${stats.followup || 0}</div>
             `;
         }
-		
-		function changePage(delta) {
+
+        function changePage(delta) {
             state.pg += delta;
             
             // استخدام دالة الرسم المتقدمة لكل من الاعتراضات والمتابعة
@@ -3643,8 +3658,8 @@ submitBulk
                 loading.classList.add('hidden');
             }
         }
-		
-		async function doTrack() {
+
+        async function doTrack() {
             const fp = document.getElementById('trkFP').value.trim();
             
             if (!fp) {
@@ -6268,6 +6283,42 @@ submitBulk
             state.filteredData = result;
             renderHRTableFiltered();
         }
+
+        function renderHRTableFiltered() {
+            const tbody = document.getElementById('hrBody');
+            const total = state.filteredData.length;
+            const totalPages = Math.ceil(total / state.lim) || 1;
+            
+            if (state.pg > totalPages) state.pg = totalPages;
+            if (state.pg < 1) state.pg = 1;
+            
+            const start = (state.pg - 1) * state.lim;
+            const end = start + state.lim;
+            const pageData = state.filteredData.slice(start, end);
+
+            // تحديد عدد الأعمدة للعرض الفارغ
+            const colSpan = state.currentTab === 'mon' ? 10 : 10;
+
+            if (total === 0) {
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty-state">لا توجد نتائج مطابقة</td></tr>`;
+                document.getElementById('pageInfo').textContent = `0 من 0`;
+                document.getElementById('totalRecs').textContent = `(0)`;
+                return;
+            }
+
+            let html = '';
+            pageData.forEach(item => {
+                if (state.currentTab === 'obj') {
+                    html += renderObjectionRowNew(item);
+                } else if (state.currentTab === 'mon') {
+                    html += renderMonitoringRowNew(item);
+                }
+            });
+            tbody.innerHTML = html;
+
+            document.getElementById('pageInfo').textContent = `صفحة ${state.pg} من ${totalPages}`;
+            document.getElementById('totalRecs').textContent = `(العدد: ${total})`;
+        }
 		
 		function renderMonitoringRowNew(item) {
             const typeClass = item.type?.includes('غرامة') ? 'ty-fine' : 
@@ -6321,76 +6372,6 @@ submitBulk
                     </td>
                 </tr>
             `;
-        }
-		
-		function renderHRTable() {
-            const tbody = document.getElementById('hrBody');
-            const isObjection = state.currentTab === 'obj';
-            const isMonitoring = state.currentTab === 'mon';
-            
-            let filteredData = [...state.allData];
-            
-            // تحديد عناصر البحث حسب التبويب
-            const searchNameInput = isObjection ? document.getElementById('objSearchName') : document.getElementById('monSearchName');
-            const searchFPInput = isObjection ? document.getElementById('objSearchFP') : document.getElementById('monSearchFP');
-            
-            const searchName = searchNameInput?.value.toLowerCase() || '';
-            const searchFP = searchFPInput?.value || '';
-            
-            const searchSpeClass = document.getElementById('fCls')?.value || ''; 
-
-            // تطبيق الفلاتر
-            if (searchName) filteredData = filteredData.filter(item => item.name?.toLowerCase().includes(searchName));
-            if (searchFP) filteredData = filteredData.filter(item => item.fp?.toString().includes(searchFP));
-            
-            // تصفية حسب التصنيف الخاص (فقط للمتابعة)
-            if (isMonitoring && searchSpeClass) {
-                filteredData = filteredData.filter(item => item.speClass === searchSpeClass);
-            }
-
-            if (isObjection) {
-                const status = document.getElementById('objFilterStatus')?.value;
-                const type = document.getElementById('objFilterType')?.value;
-                if (status) filteredData = filteredData.filter(item => item.objStatus === status);
-                if (type) filteredData = filteredData.filter(item => item.type === type);
-            }
-            
-            state.filteredData = filteredData;
-            
-            // التقسيم للصفحات
-            const total = filteredData.length;
-            const totalPages = Math.ceil(total / state.lim) || 1;
-            if (state.pg > totalPages) state.pg = 1; // إعادة تعيين للصفحة الأولى عند البحث
-            
-            const start = (state.pg - 1) * state.lim;
-            const end = start + state.lim;
-            const pageData = filteredData.slice(start, end);
-            
-            // تحديد عدد الأعمدة (colspan) لرسالة "لا توجد نتائج"
-            const colSpan = isMonitoring ? 10 : 9;
-
-            if (pageData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty-state">لا توجد بيانات مطابقة للبحث</td></tr>`;
-                document.getElementById('pageInfo').textContent = `0 من 0`;
-                document.getElementById('totalRecs').textContent = `(0)`;
-                return;
-            }
-            
-            let html = '';
-            pageData.forEach(item => {
-                // === التعديل هنا: اختيار دالة الرسم المناسبة ===
-                if (isMonitoring) {
-                    html += renderMonitoringRowNew(item); // استخدام الدالة الجديدة للمتابعة
-                } else if (isObjection) {
-                    html += renderObjectionRowNew(item); // استخدام الدالة الجديدة للاعتراضات
-                } else {
-                    html += renderFollowupRow(item); // احتياطي
-                }
-            });
-            tbody.innerHTML = html;
-            
-            document.getElementById('pageInfo').textContent = `صفحة ${state.pg} من ${totalPages}`;
-            document.getElementById('totalRecs').textContent = `(العدد: ${total})`;
         }
 		
 		function renderObjectionRowNew(item) {
