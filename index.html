@@ -1553,7 +1553,7 @@
     <!-- السكريبت الرئيسي -->
     <script>
         // ==================== الإعدادات العامة ====================
-        const API = "https://script.google.com/macros/s/AKfycbwSS1RSQX1ikLVzEbACOCYWTvq2CVdW4XgVf00u0hpmbma11CN1VgpC7-6B7vRkfdg2rg/exec";
+        const API = "https://script.google.com/macros/s/AKfycby2PaX268qTg_SeNkGRGX8GgrSm6A0q9Q7J0VKbpfYR-1z05cl_ZvMgwh5Xc6u9gLhHOA/exec";
         
         // حالة التطبيق
         let state = {
@@ -3027,6 +3027,8 @@ submitBulk
             switch (tab) {
                 case 'obj':
                     document.getElementById('statsBox').classList.remove('hidden');
+                    // ... (كود الاعتراضات كما هو لم يتغير)
+                    // ... (اختصاراً للمساحة، ابقِ كود obj كما هو لديك)
                     
                     const objColumns = [
                         { key: 'name', title: 'الموظف' },
@@ -3064,17 +3066,18 @@ submitBulk
                 case 'mon':
                     document.getElementById('monFilters').classList.remove('hidden');
                     
-                    // === الأعمدة الجديدة للمتابعة ===
+                    // === الترتيب الصحيح للأعمدة (10 أعمدة + الشيك بوكس + الإجراء = 12 عمود) ===
                     const monColumns = [
-                        { key: 'name', title: 'الموظف' },
-                        { key: 'section', title: 'القسم' },
-                        { key: 'type', title: 'النوع' },
-                        { key: 'amount', title: 'المبلغ' },
-                        { key: 'reason', title: 'السبب' },
-                        { key: 'addedBy', title: 'بواسطة' },
-                        { key: 'addedAt', title: 'تاريخ التنزيل' },
-                        { key: 'dateStr', title: 'الاستحقاق' },
-                        { key: 'isFollowed', title: 'الحالة' }
+                        { key: 'name', title: 'الموظف' },       // 1
+                        { key: 'section', title: 'القسم' },      // 2
+                        { key: 'type', title: 'النوع' },         // 3
+                        { key: 'amount', title: 'المبلغ' },      // 4
+                        { key: 'repetition', title: 'التكرار' }, // 5 (العمود الجديد)
+                        { key: 'reason', title: 'السبب' },       // 6
+                        { key: 'addedBy', title: 'بواسطة' },     // 7
+                        { key: 'addedAt', title: 'تاريخ التنزيل' }, // 8
+                        { key: 'dateStr', title: 'الاستحقاق' },  // 9
+                        { key: 'isFollowed', title: 'الحالة' }   // 10
                     ];
 
                     let monHeadHTML = '<tr><th width="50"><input type="checkbox" onclick="toggleAllFollowup(this)"></th>';
@@ -3108,12 +3111,13 @@ submitBulk
                         });
                     }
                     
+                    // ضبط colspan ليكون 12 (عدد الأعمدة الكلي)
                     document.getElementById('hrBody').innerHTML = `
                         <tr>
-                            <td colspan="10" class="empty-state">
+                            <td colspan="12" class="empty-state">
                                 <div class="empty-state-icon"><i class="fas fa-calendar-alt"></i></div>
                                 <h3 class="empty-state-title">بانتظار تحديد التاريخ</h3>
-                                <p class="empty-state-description">يرجى تحديد فترة "من" و "إلى" لعرض سجلات المتابعة (حسب تاريخ التنزيل).</p>
+                                <p class="empty-state-description">يرجى تحديد فترة "من" و "إلى" لعرض سجلات المتابعة.</p>
                             </td>
                         </tr>
                     `;
@@ -3141,7 +3145,6 @@ submitBulk
                     break;
             }
         }
-		
 		
 		function filterSummaryTable() {
             const query = document.getElementById('sumSearchAny').value.toLowerCase().trim();
@@ -6334,38 +6337,75 @@ submitBulk
             const rowBg = isDone ? 'bg-blue-50/40' : 'hover:bg-slate-50';
             const checkboxStatus = isDone ? 'checked disabled' : '';
 
+            // === إنشاء بادج التكرار ===
+            // يظهر فقط إذا كان هناك رقم تكرار، وإلا تظهر شرطة
+            let repetitionDisplay = '<span class="text-slate-300">-</span>';
+            
+            if (item.repetition && item.repetition > 0) {
+                // تلوين التكرار حسب الرقم
+                let badgeClass = 'bg-slate-100 text-slate-600 border-slate-200'; // افتراضي (1)
+                
+                if (item.repetition === 2) {
+                    badgeClass = 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]'; // أصفر (كما في الصورة القديمة)
+                } else if (item.repetition >= 3) {
+                    badgeClass = 'bg-[#fee2e2] text-[#991b1b] border-[#fca5a5]'; // أحمر (خطر)
+                }
+
+                repetitionDisplay = `
+                    <span class="inline-block px-3 py-1 rounded text-xs font-bold border shadow-sm ${badgeClass}">
+                        تكرار: ${item.repetition}
+                    </span>
+                `;
+            }
+
             return `
                 <tr class="${rowBg} transition-colors text-sm border-b">
-                    <td class="text-center">
+                    <td class="text-center align-middle">
                         <input type="checkbox" class="followup-checkbox cursor-pointer" 
                                data-id="${item.id}" 
                                data-sheet="${item.sheetType}"
                                onchange="toggleFollowupSelection(this)"
                                ${checkboxStatus}>
                     </td>
-                    <td class="text-right">
-                        <div class="font-bold text-slate-800">${item.name}</div>
+                    
+                    <td class="text-right align-middle">
+                        <div class="font-bold text-slate-800 whitespace-normal break-words">${item.name}</div>
                         <div class="text-xs text-slate-500 font-mono">${item.fp}</div>
                     </td>
-                    <td class="text-center text-xs font-semibold text-slate-600">${item.section || '-'}</td>
-                    <td class="text-center"><span class="type-badge ${typeClass}">${item.type}</span></td>
-                    <td class="font-bold text-slate-700 text-center" dir="ltr">${Number(item.amount).toLocaleString()}</td>
-                    <td class="text-right max-w-[200px]">
-                        <div class="truncate text-slate-800" title="${item.reason}">${item.reason}</div>
-                        ${item.speClass ? `<div class="text-[10px] text-blue-500 mt-1">${item.speClass}</div>` : ''}
+                    
+                    <td class="text-center align-middle text-xs font-semibold text-slate-600 whitespace-normal">${item.section || '-'}</td>
+                    
+                    <td class="text-center align-middle"><span class="type-badge ${typeClass}">${item.type}</span></td>
+                    
+                    <td class="font-bold text-slate-700 text-center align-middle" dir="ltr">${Number(item.amount).toLocaleString()}</td>
+                    
+                    <td class="text-center align-middle">
+                        ${repetitionDisplay}
                     </td>
-                    <td class="text-center text-xs text-blue-600 font-medium">${item.addedBy}</td>
-                    <td class="text-center text-xs font-mono" dir="ltr">${item.addedAt}</td>
-                    <td class="text-center text-xs font-mono text-slate-500" dir="ltr">${item.dateStr}</td>
-                    <td class="text-center">${statusBadge}</td>
-                    <td class="text-center">
+                    
+                    <td class="text-right align-middle max-w-[250px]">
+                        <div class="whitespace-normal break-words text-slate-800 font-medium leading-relaxed">
+                            ${item.reason}
+                        </div>
+                        ${item.speClass ? `<div class="text-[11px] text-blue-600 mt-1 whitespace-normal bg-blue-50 px-2 py-0.5 rounded inline-block border border-blue-100">${item.speClass}</div>` : ''}
+                    </td>
+                    
+                    <td class="text-center align-middle text-xs text-blue-600 font-medium whitespace-normal w-24">${item.addedBy}</td>
+                    
+                    <td class="text-center align-middle text-xs font-mono whitespace-nowrap" dir="ltr">${item.addedAt}</td>
+                    
+                    <td class="text-center align-middle text-xs font-mono text-slate-500 whitespace-nowrap" dir="ltr">${item.dateStr}</td>
+                    
+                    <td class="text-center align-middle">${statusBadge}</td>
+                    
+                    <td class="text-center align-middle">
                         <div class="flex gap-1 justify-center">
                             <button onclick="editHRItem('${item.id}', '${item.sheetType}', '${item.type}', '${item.amount}', '${item.reason}', '${item.genClass}', '${item.speClass}')" 
-                                    class="text-blue-600 hover:bg-blue-100 p-1 rounded transition">
+                                    class="text-blue-600 hover:bg-blue-100 p-2 rounded transition" title="تعديل">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button onclick="deleteHRItem('${item.id}', '${item.sheetType}')" 
-                                    class="text-red-600 hover:bg-red-100 p-1 rounded transition">
+                                    class="text-red-600 hover:bg-red-100 p-2 rounded transition" title="حذف">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -6396,10 +6436,14 @@ submitBulk
                     <td class="text-xs text-blue-600 font-semibold">${item.addedBy}</td>
                     <td class="text-xs font-mono" dir="ltr">${item.addedAt}</td>
                     <td class="text-xs font-mono text-slate-500" dir="ltr">${item.dateStr}</td>
-                    <td class="text-right max-w-[200px]">
-                       <div class="truncate text-slate-800" title="${item.objReason}">${item.objReason} ${hasImage}</div>
+                    
+                    <td class="text-right max-w-[300px]">
+                       <div class="whitespace-normal break-words text-slate-800 leading-relaxed" title="${item.objReason}">
+                           ${item.objReason} ${hasImage}
+                       </div>
                        <div class="text-[10px] text-slate-400 mt-1 truncate" title="${item.reason}">أصل: ${item.reason}</div>
                     </td>
+                    
                     <td><span class="status-badge ${statusClass}">${item.objStatus}</span></td>
                     <td class="text-xs font-mono bg-yellow-50 p-2 text-center" dir="ltr">${item.objDate}</td>
                     <td>
